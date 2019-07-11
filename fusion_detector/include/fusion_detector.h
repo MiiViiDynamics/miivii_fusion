@@ -97,90 +97,56 @@
 using namespace std;
 using namespace cv;
 using namespace miivii;
-//using namespace integrated_viewer;
+
 namespace enc = sensor_msgs::image_encodings;
 
 class fusion_detector
 {
 public:
-  ros::NodeHandle                                 nh_;
-  MiiViiCameraParameterWrap                       m_cameraParameter[CAMERA_COUNT];
-  MiiViiFusion                                    m_MiiViiFusion[CAMERA_COUNT];
+  ros::NodeHandle                                  nh_;
+  MiiViiCameraParameterWrap                        m_cameraParameter[CAMERA_COUNT];
+  MiiViiFusion                                     m_MiiViiFusion[CAMERA_COUNT];
 public:
-  uint                                            camCount;
-  int                                             camCount_;
-  std::string                                     calibration_file_[CAMERA_COUNT];
-  std::string                                     camera_topic_name_[CAMERA_COUNT];
+  uint                                             camCount;
+  int                                              camCount_;
+  std::string                                      calibration_file_[CAMERA_COUNT];
+  std::string                                      camera_topic_name_[CAMERA_COUNT];
 
-  bool                                            lidar_processing_;
-  bool                                            draw_fusion_pts_[CAMERA_COUNT];
-  bool                                            enable_show_results_window_;
+  bool                                             lidar_processing_;
+  bool                                             draw_fusion_pts_[CAMERA_COUNT];
+  bool                                             enable_show_results_window_;
 
 
   image_transport::Subscriber                      image_sub_[CAMERA_COUNT];
+  ros::Subscriber                                  lidar_sub_;
+
   ros::Subscriber                                  yolo_detect_sub_[CAMERA_COUNT];
   image_transport::Publisher                       fusion_results_image_pub_[CAMERA_COUNT];
+  ros::Publisher                                   _pub_jsk_boundingboxes;
+  ros::Publisher                                   publisher_fused_text_;
 
   std::string                                      detected_objects_vision[CAMERA_COUNT];
+  std::string                                      pub_jsk_boundingboxes_topic_;
+  std::string                                      lidar_topic_name_;
+
   autoware_msgs::DetectedObjectArray::ConstPtr     detected_objects_msg_[CAMERA_COUNT];
 
-public:
-
-  ros::Publisher                                  _pub_clusters_message;
-  ros::Publisher                                  _pub_detected_objects;
-  ros::Publisher                                  _pub_jsk_boundingboxes;
-  std::string                                      pub_jsk_boundingboxes_topic_;
-
-public:
-
   bool                                             bGetingImage[CAMERA_COUNT];
-  cv::Mat                                         *InImage[CAMERA_COUNT];
-  std::string                                      lidar_topic_name_;
-  ros::Subscriber                                  lidar_sub_;
-public://cluster
-  double                                       _clip_min_height;
-  double                                       _clip_max_height;
-  double                                       _max_boundingbox_side;
-  double                                       _remove_points_upto;
-  double                                       _cluster_merge_threshold;
-  double                                       _clustering_distance;
-  double                                       _leaf_size;
-  int                                          _cluster_size_min;
-  int                                          _cluster_size_max;
+  bool                                             _pose_estimation;
+  bool                                             _use_gpu;
+  bool                                             debug_time;           //是否在终端打印单帧处理耗时信息
 
-  std::vector<double>                          _clustering_ranges;
-  std::string                                  _output_frame;
-  std_msgs::Header                             _velodyne_header;
+  cv::Mat                                          *InImage[CAMERA_COUNT];
 
-  bool                                         _downsample_cloud;
-  bool                                         _pose_estimation;
-  bool                                         _use_diffnormals;
-  bool                                         _use_gpu;
-  std::vector<cv::Scalar>                      _colors;
+  std_msgs::Header                                 lidar_msg_header;
 
-  tf::StampedTransform                         *_transform;
-  tf::StampedTransform                         *_velodyne_output_transform;
-  tf::TransformListener                        *_transform_listener;
-  tf::TransformListener                        *_vectormap_transform_listener;
+  std::vector<cv::Scalar>                          _colors;
 
-public://range-vison
-  ros::Publisher                               publisher_fused_text_;
-  
-  int                                          marker_id_;
-  std::string                                  min_car_dimensions;
-  std::string                                  min_person_dimensions;
-  std::string                                  min_truck_dimensions;
-
-  bool                                         processing_;
-
-  double                                        car_width_, car_height_, car_depth_;
-  double                                        person_width_, person_height_, person_depth_;
-  double                                        truck_width_, truck_depth_, truck_height_;
+  int                                              marker_id_;
 public:
   fusion_detector():nh_("~")
   {
     Initialize_Camera_lidar();
-    Initialize_cluster();
   }
 public:
   ~fusion_detector()
@@ -190,10 +156,6 @@ public:
   }
 public:
   void Initialize_Camera_lidar();
-
-  void Initialize_cluster();
-
-public:
 
   void cameraCallback(const sensor_msgs::ImageConstPtr& msg,int cameraID);
 
@@ -205,14 +167,9 @@ public:
 
   void points_to_image_new( sensor_msgs::PointCloud2ConstPtr LiDarData);
 
-  void transformBoundingBox(const jsk_recognition_msgs::BoundingBox &in_boundingbox,
-                                  jsk_recognition_msgs::BoundingBox &out_boundingbox,
-                            const std::string &in_target_frame,
-                            const std_msgs::Header &in_header);
-
   void publishBoundingBoxArray( const ros::Publisher* in_publisher,
-                                const jsk_recognition_msgs::BoundingBoxArray& in_boundingbox_array,
-                                const std::string& in_target_frame, const std_msgs::Header& in_header);
+                                const jsk_recognition_msgs::BoundingBoxArray& in_boundingbox_array);
+
   visualization_msgs::MarkerArray ObjectsToMarkers(const autoware_msgs::DetectedObjectArray &in_objects);
 
   jsk_recognition_msgs::BoundingBoxArray ObjectsToBoxes(const autoware_msgs::DetectedObjectArray &in_objects);

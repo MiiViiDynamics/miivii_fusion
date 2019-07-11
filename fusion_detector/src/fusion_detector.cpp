@@ -1,11 +1,19 @@
 #include "fusion_detector.h"
-
+#include <unistd.h>
 
 #define USE_DEBUG 1
 #if USE_DEBUG
 #define DEBUG_PRINT \
   ROS_INFO("<MIIVII-DEBUG> [%s] %d (%s)", __FUNCTION__, __LINE__, __FILE__);
 #endif
+
+double what_time_is_it_now() {
+  struct timeval time;
+  if (gettimeofday(&time, NULL)) {
+    return 0;
+  }
+  return (double)time.tv_sec + (double)time.tv_usec * .000001;
+}
 
 void fusion_detector::Initialize_Camera_lidar(){
   for(int kk=0; kk<CAMERA_COUNT; kk++)
@@ -62,31 +70,20 @@ void fusion_detector::Initialize_Camera_lidar(){
     InImage[i]->create(m_cameraParameter[i].imageSize.width, m_cameraParameter[i].imageSize.height, CV_8UC3);
   }
 
-  nh_.param("lidar_topic", lidar_topic_name_, std::string("/points_raw"));
+  nh_.param("lidar_topic", lidar_topic_name_, std::string("/lidar_points"));
   ROS_INFO("%s",lidar_topic_name_.c_str());
   lidar_sub_ = nh_.subscribe(lidar_topic_name_.c_str(), 1, &fusion_detector::lidarCallback,this);
 
   std::string fused_text_str  = "/detection/combined_objects_labels";
   publisher_fused_text_    = nh_.advertise<visualization_msgs::MarkerArray>(fused_text_str.c_str(), 1);
 
-  ROS_INFO("camera lidar initial done");
-}
+  // debug
+  nh_.param<bool>("debug_time", debug_time, false);
 
-
-void fusion_detector::Initialize_cluster()
-{
   ROS_INFO("cluster initial start");
 
-  nh_.param<bool>("enable_show_results_window", enable_show_results_window_, false);
+  nh_.param<bool>("visualize_fusion", enable_show_results_window_, false);
 
-
-  tf::StampedTransform transform;
-  tf::TransformListener listener;
-  tf::TransformListener vectormap_tf_listener;
-
-  _vectormap_transform_listener = &vectormap_tf_listener;
-  _transform = &transform;
-  _transform_listener = &listener;
 
 #if (CV_MAJOR_VERSION == 3)
     generateColors(_colors, 255);
@@ -97,144 +94,15 @@ void fusion_detector::Initialize_cluster()
   nh_.param("pub_jsk_boundingboxes_topic", pub_jsk_boundingboxes_topic_, std::string("/detection/lidar_detector/bounding_boxess"));
   ROS_INFO("%s",pub_jsk_boundingboxes_topic_.c_str());
 
-  _use_diffnormals = false;
-  if (nh_.getParam("use_diffnormals", _use_diffnormals))
-  {
-    if (_use_diffnormals)
-      ROS_INFO("Euclidean Clustering: Applying difference of normals on clustering pipeline");
-    else
-      ROS_INFO("Euclidean Clustering: Difference of Normals will not be used.");
-  }
-
-    /* Initialize tuning parameter */
-  nh_.param("downsample_cloud", _downsample_cloud, false);
-  ROS_INFO("[%s] downsample_cloud: %d", __APP_NAME__, _downsample_cloud);
-
-  nh_.param("leaf_size", _leaf_size, 0.1);
-  ROS_INFO("[%s] leaf_size: %f", __APP_NAME__, _leaf_size);
-
-  nh_.param("cluster_size_min", _cluster_size_min, 10);
-  ROS_INFO("[%s] cluster_size_min %d", __APP_NAME__, _cluster_size_min);
-
-  nh_.param("cluster_size_max", _cluster_size_max, 100000);
-  ROS_INFO("[%s] cluster_size_max: %d", __APP_NAME__, _cluster_size_max);
-
   nh_.param("pose_estimation", _pose_estimation, false);
   ROS_INFO("[%s] pose_estimation: %d", __APP_NAME__, _pose_estimation);
-
-  nh_.param("clip_min_height", _clip_min_height, -1.3);
-  ROS_INFO("[%s] clip_min_height: %f", __APP_NAME__, _clip_min_height);
-
-  nh_.param("clip_max_height", _clip_max_height, 0.5);
-  ROS_INFO("[%s] clip_max_height: %f", __APP_NAME__, _clip_max_height);
-
-  nh_.param("max_boundingbox_side", _max_boundingbox_side, 10.0);
-  ROS_INFO("[%s] max_boundingbox_side: %f", __APP_NAME__, _max_boundingbox_side);
-
-  nh_.param("cluster_merge_threshold", _cluster_merge_threshold, 1.5);
-  ROS_INFO("[%s] cluster_merge_threshold: %f", __APP_NAME__, _cluster_merge_threshold);
-
-  nh_.param<std::string>("output_frame", _output_frame, "velodyne");
-  ROS_INFO("[%s] output_frame: %s", __APP_NAME__, _output_frame.c_str());
-
-  nh_.param("remove_points_upto", _remove_points_upto, 0.0);
-  ROS_INFO("[%s] remove_points_upto: %f", __APP_NAME__, _remove_points_upto);
-
-  nh_.param("clustering_distance", _clustering_distance, 0.02);
-  ROS_INFO("[%s] clustering_distance: %f", __APP_NAME__, _clustering_distance);
 
   nh_.param("use_gpu", _use_gpu, false);
   ROS_INFO("[%s] use_gpu: %d", __APP_NAME__, _use_gpu);
 
-  // nh_.param("use_multiple_thres", _use_multiple_thres, false);
-  // ROS_INFO("[%s] use_multiple_thres: %d", __APP_NAME__, _use_multiple_thres);
-
-  std::string str_distances;
-  std::string str_ranges;
-  nh_.param("clustering_distances", str_distances, std::string("[0.2,1.1,1.6,2.1,2.6]"));
-  ROS_INFO("[%s] clustering_distances: %s", __APP_NAME__, str_distances.c_str());
-
-  nh_.param("clustering_ranges", str_ranges, std::string("[15,30,45,60]"));
-  ROS_INFO("[%s] clustering_ranges: %s", __APP_NAME__, str_ranges.c_str());
-
-  // if (_use_multiple_thres)
-  // {
-  //   YAML::Node distances = YAML::Load(str_distances);
-  //   YAML::Node ranges = YAML::Load(str_ranges);
-  //   size_t distances_size = distances.size();
-  //   size_t ranges_size = ranges.size();
-  //   if (distances_size == 0 || ranges_size == 0)
-  //   {
-  //     ROS_ERROR("Invalid size of clustering_ranges or/and clustering_distance. \
-  //   The size of clustering distance and clustering_ranges should not be 0");
-  //     ros::shutdown();
-  //   }
-  //   if ((distances_size - ranges_size) != 1)
-  //   {
-  //     ROS_ERROR("Invalid size of clustering_ranges or/and clustering_distance. \
-  //   Expecting that (distances_size - ranges_size) == 1 ");
-  //     ros::shutdown();
-  //   }
-  //   for (size_t i_distance = 0; i_distance < distances_size; i_distance++)
-  //   {
-  //     _clustering_distances.push_back(distances[i_distance].as<double>());
-  //   }
-  //   for (size_t i_range = 0; i_range < ranges_size; i_range++)
-  //   {
-  //     _clustering_ranges.push_back(ranges[i_range].as<double>());
-  //   }
-  // }
-  // else
-  // {
-  //   YAML::Node distances = YAML::Load(str_distances);
-  //   YAML::Node ranges = YAML::Load(str_ranges);
-  //   size_t distances_size = distances.size();
-  //   size_t ranges_size = ranges.size();
-  //   for (size_t i_distance = 0; i_distance < distances_size; i_distance++)
-  //   {
-  //     _clustering_distances.push_back(distances[i_distance].as<double>());
-  //   }
-  //   for (size_t i_range = 0; i_range < ranges_size; i_range++)
-  //   {
-  //     _clustering_ranges.push_back(ranges[i_range].as<double>());
-  //   }
-  // }
-
   _pub_jsk_boundingboxes   = nh_.advertise<jsk_recognition_msgs::BoundingBoxArray>(pub_jsk_boundingboxes_topic_.c_str(), 1);
 
-  nh_.param<std::string>("min_car_dimensions", min_car_dimensions, "[3,2,2]");//w,h,d
-  ROS_INFO("[%s] min_car_dimensions: %s", __APP_NAME__, min_car_dimensions.c_str());
-
-  nh_.param<std::string>("min_person_dimensions", min_person_dimensions, "[1,2,1]");
-  ROS_INFO("[%s] min_person_dimensions: %s", __APP_NAME__, min_person_dimensions.c_str());
-
-  nh_.param<std::string>("min_truck_dimensions", min_truck_dimensions, "[4,2,2]");
-  ROS_INFO("[%s] min_truck_dimensions: %s", __APP_NAME__, min_truck_dimensions.c_str());
-
-  // YAML::Node car_dimensions    = YAML::Load(min_car_dimensions);
-  // YAML::Node person_dimensions = YAML::Load(min_person_dimensions);
-  // YAML::Node truck_dimensions  = YAML::Load(min_truck_dimensions);
-
-  // if (car_dimensions.size() == 3)
-  // {
-  //   car_width_  = car_dimensions[0].as<double>();
-  //   car_height_ = car_dimensions[1].as<double>();
-  //   car_depth_  = car_dimensions[2].as<double>();
-  // }
-  // if (person_dimensions.size() == 3)
-  // {
-  //   person_width_  = person_dimensions[0].as<double>();
-  //   person_height_ = person_dimensions[1].as<double>();
-  //   person_depth_  = person_dimensions[2].as<double>();
-  // }
-  // if (truck_dimensions.size() == 3)
-  // {
-  //   truck_width_  = truck_dimensions[0].as<double>();
-  //   truck_height_ = truck_dimensions[1].as<double>();
-  //   truck_depth_  = truck_dimensions[2].as<double>();
-  // }
-
-  ROS_INFO("cluster initial done");
+  ROS_INFO("MiiVii Fusion initial done");
 }
 
 void fusion_detector::fusion_lidar_cameras(sensor_msgs::PointCloud2ConstPtr LiDarData)
@@ -247,7 +115,7 @@ void fusion_detector::fusion_lidar_cameras(sensor_msgs::PointCloud2ConstPtr LiDa
 
   autoware_msgs::DetectedObjectArray fused_objects;
   fused_objects.objects.clear();
-  fused_objects.header = _velodyne_header;
+  fused_objects.header = lidar_msg_header;
   autoware_msgs::Centroids centroids;
   jsk_recognition_msgs::BoundingBoxArray boundingbox_array;
   std::vector<ClusterPtr> final_clusters;
@@ -287,7 +155,8 @@ void fusion_detector::fusion_lidar_cameras(sensor_msgs::PointCloud2ConstPtr LiDa
 
       result2d.push_back(temp_result2d);
     }
-    //ROS_INFO("%d detected_objects_msg_:%d result2d objectsNum:%d",  __LINE__, tempnumbers, result2d.size());
+
+    //ROS_INFO("%d detected_objects_msg_:%d result2d objectsNum:%d",  __LINE__, tempCameraId, result2d.size());
 
     std::vector<MiiViiObject3d> outputresult;
     m_MiiViiFusion[tempCameraId].Fuse_Lidar_Camera( incloud,  m_cameraParameter[tempCameraId],
@@ -313,14 +182,16 @@ void fusion_detector::fusion_lidar_cameras(sensor_msgs::PointCloud2ConstPtr LiDa
       else
         in_label = "unknow";
 
+      //ROS_INFO("[%s]  %d ", __APP_NAME__, __LINE__);
       out_cluster->SetCloud_z(outputresult[kkk].object,
-                      _velodyne_header,
+                      lidar_msg_header,
                       k,   //id
                       (int)_colors[k].val[0],
                       (int)_colors[k].val[1],
                       (int)_colors[k].val[2],
                       in_label,
                       _pose_estimation);
+      //ROS_INFO("[%s]  %d ", __APP_NAME__, __LINE__);
       k++;
       if(out_cluster!=NULL)
       {
@@ -341,7 +212,7 @@ void fusion_detector::fusion_lidar_cameras(sensor_msgs::PointCloud2ConstPtr LiDa
 
         autoware_msgs::CloudCluster tempcloud_cluster;
 
-        out_cluster->ToROSMessage(_velodyne_header, tempcloud_cluster);
+        out_cluster->ToROSMessage(lidar_msg_header, tempcloud_cluster);
 
         fusion_detected_object.header      = tempcloud_cluster.header;
         fusion_detected_object.pose        = tempcloud_cluster.bounding_box.pose;
@@ -353,28 +224,31 @@ void fusion_detector::fusion_lidar_cameras(sensor_msgs::PointCloud2ConstPtr LiDa
       }
     }
   }
+  //ROS_INFO("[%s]  %d  %d", __APP_NAME__, __LINE__, final_clusters.size());
 
   for (unsigned int i = 0; i < final_clusters.size(); i++)
   {
     jsk_recognition_msgs::BoundingBox bounding_box = final_clusters[i]->GetBoundingBox();
 
-    bounding_box.header = _velodyne_header;
+    bounding_box.header = lidar_msg_header;
     if (final_clusters[i]->IsValid())
     {
       boundingbox_array.boxes.push_back(bounding_box);
+
     }
   }
 
-  boundingbox_array.header = _velodyne_header;
-  publishBoundingBoxArray(&_pub_jsk_boundingboxes, boundingbox_array, _output_frame, _velodyne_header);
+
+  boundingbox_array.header = lidar_msg_header;
+  publishBoundingBoxArray(&_pub_jsk_boundingboxes, boundingbox_array);
 
   visualization_msgs::MarkerArray           fused_objects_labels;
   marker_id_ = 0;
+
   fused_objects_labels = ObjectsToMarkers(fused_objects);
 
   fused_objects_labels.markers.insert(fused_objects_labels.markers.end(),
                                       fused_objects_labels.markers.begin(), fused_objects_labels.markers.end());
-
 
   publisher_fused_text_.publish(fused_objects_labels);
 }
@@ -409,7 +283,7 @@ void fusion_detector::points_to_image_new( sensor_msgs::PointCloud2ConstPtr LiDa
           temp_result2d.type = MOTORBIKE;
         else
           temp_result2d.type = UNKOWN;
-          
+
         temp_result2d.objectID      = detected_object.id;
         temp_result2d.object.x      = detected_object.x;
         temp_result2d.object.y      = detected_object.y;
@@ -422,9 +296,9 @@ void fusion_detector::points_to_image_new( sensor_msgs::PointCloud2ConstPtr LiDa
     }
     cv::Mat fusion_resultImage;
     if(!bGetingImage[tempCameraId]){
-      m_MiiViiFusion[tempCameraId].Fuse_Lidar_Camera_to_image(in_origin_cloud_ptr,  
-                                                              m_cameraParameter[tempCameraId], 
-                                                              result2d,  
+      m_MiiViiFusion[tempCameraId].Fuse_Lidar_Camera_to_image(in_origin_cloud_ptr,
+                                                              m_cameraParameter[tempCameraId],
+                                                              result2d,
                                                               *InImage[tempCameraId],
                                                               fusion_resultImage);
 
@@ -449,53 +323,10 @@ void fusion_detector::points_to_image_new( sensor_msgs::PointCloud2ConstPtr LiDa
   }
 }
 
-void fusion_detector::transformBoundingBox(const  jsk_recognition_msgs::BoundingBox &in_boundingbox,
-                                                  jsk_recognition_msgs::BoundingBox &out_boundingbox,
-                                                  const std::string &in_target_frame,
-                                                  const std_msgs::Header &in_header)
-{
-    geometry_msgs::PoseStamped pose_in, pose_out;
-    pose_in.header = in_header;
-    pose_in.pose = in_boundingbox.pose;
-    try
-    {
-      _transform_listener->transformPose(in_target_frame, ros::Time(), pose_in, in_header.frame_id, pose_out);
-    }
-    catch (tf::TransformException &ex)
-    {
-        ROS_ERROR("transformBoundingBox: %s", ex.what());
-    }
-    out_boundingbox.pose = pose_out.pose;
-    out_boundingbox.header = in_header;
-    out_boundingbox.header.frame_id = in_target_frame;
-    out_boundingbox.dimensions = in_boundingbox.dimensions;
-    out_boundingbox.value = in_boundingbox.value;
-    out_boundingbox.label = in_boundingbox.label;
-}
-
-
 void fusion_detector::publishBoundingBoxArray(const ros::Publisher* in_publisher,
-                                              const jsk_recognition_msgs::BoundingBoxArray& in_boundingbox_array,
-                                              const std::string& in_target_frame,
-                                              const std_msgs::Header& in_header)
+                                              const jsk_recognition_msgs::BoundingBoxArray& in_boundingbox_array)
 {
-  if (in_target_frame != in_header.frame_id)
-  {
-    jsk_recognition_msgs::BoundingBoxArray boundingboxes_transformed;
-    boundingboxes_transformed.header = in_header;
-    boundingboxes_transformed.header.frame_id = in_target_frame;
-    for (auto i = in_boundingbox_array.boxes.begin(); i != in_boundingbox_array.boxes.end(); i++)
-    {
-      jsk_recognition_msgs::BoundingBox boundingbox_transformed;
-      transformBoundingBox(*i, boundingbox_transformed, in_target_frame, in_header);
-      boundingboxes_transformed.boxes.push_back(boundingbox_transformed);
-    }
-    in_publisher->publish(boundingboxes_transformed);
-  }
-  else
-  {
-    in_publisher->publish(in_boundingbox_array);
-  }
+  in_publisher->publish(in_boundingbox_array);
 }
 
 void fusion_detector::cameraCallback(const sensor_msgs::ImageConstPtr& msg, int cameraID)
@@ -520,14 +351,21 @@ void fusion_detector::lidarCallback(const sensor_msgs::PointCloud2ConstPtr & msg
 {
   if (msg == NULL)
     return;
-  _velodyne_header = msg->header;
+  lidar_msg_header = msg->header;
   if(!draw_fusion_pts_[0] && !draw_fusion_pts_[1] && !draw_fusion_pts_[2]  && !draw_fusion_pts_[3])
   {
     lidar_processing_ = true;
+
+    double time;
+    if (debug_time)
+      time = what_time_is_it_now();
     points_to_image_new(msg);
 
     fusion_lidar_cameras(msg);
     lidar_processing_ = false;
+
+    if (debug_time)
+      ROS_INFO("infer cost %f ms\n", (what_time_is_it_now() - time) * 1000);
   }
 }
 
@@ -561,7 +399,7 @@ visualization_msgs::MarkerArray fusion_detector::ObjectsToMarkers( const autowar
       }
 
       if(!object.label.empty() && object.label != "unknown")
-        marker.text = object.label + " "; 
+        marker.text = object.label + " ";
 
       std::stringstream distance_stream;
       distance_stream << std::fixed << std::setprecision(2)
