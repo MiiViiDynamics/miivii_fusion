@@ -1,0 +1,32 @@
+<launch>
+  <node name="fusion_detector" pkg="fusion_detector" type="fusion_detector_node" output="screen" >
+
+    <!-- setup camera topic & detect_topic & camera lidar calibration -->
+    <!-- support max 4 cameras -->
+    <param name="camCount" value="3"/>
+    <!--camera 1-->
+    <param name="camera1_topic" value="/camera_perception/perception/front/image_raw" />
+    <param name="camera1_detect_results" value="/camera_perception/perception/front/detection_results" />
+    <param name="camera1_cali_file" value="$(find fusion_unit_perception)/calibration/camera_lidar/CalmCar/perception_front_120.yaml" />
+
+    <!--camera 2-->
+    <param name="camera2_topic" value="/camera_perception/perception/left/image_raw" />
+    <param name="camera2_detect_results" value="/camera_perception/perception/left/detection_results" />
+    <param name="camera2_cali_file" value="$(find fusion_unit_perception)/calibration/camera_lidar/CalmCar/perception_left.yaml" />
+
+    <!--camera 3-->
+    <param name="camera3_topic" value="/camera_perception/perception/right/image_raw" />
+    <param name="camera3_detect_results" value="/camera_perception/perception/right/detection_results" />
+    <param name="camera3_cali_file" value="$(find fusion_unit_perception)/calibration/camera_lidar/CalmCar/perception_right.yaml" />
+
+
+    <param name="lidar_topic" value="/lidar_points" />
+    <param name="visualize_fusion" value="false" /><!-- param, show fusion results window -->
+
+    <param name="bounding_boxes_topic" value="/detection/lidar_detector/bounding_boxes" />
+    <param name="pose_estimation" value="true"/>
+    <param name="use_gpu" value="false"/>
+    <param name="debug_time" value="false" />
+  </node>
+
+</launch>

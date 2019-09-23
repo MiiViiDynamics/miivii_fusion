@@ -1,0 +1,9 @@
+<launch>
+
+  <!--Start sensing nodes-->
+
+  <!--Start record rosbag-->
+  <node name="recordbag" pkg="rosbag" type="record"
+      args="  -b 1024 /imu /imu_sync /scan /scan_sync /lidar_points /lidar_points_sync -o /home/nvidia/data/back_pack " />
+
+</launch>

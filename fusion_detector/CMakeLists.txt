@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(fusion_detector)
 
 set (CMAKE_CXX_STANDARD 11)
@@ -9,27 +9,26 @@ find_package(OpenCV REQUIRED)
 find_package(PCL REQUIRED)
 find_package(autoware_build_flags REQUIRED)
 
+find_package(Boost REQUIRED COMPONENTS system filesystem)
+if(NOT Boost_FOUND)
+        message("Not found Boost")
+endif()
+
 find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  std_msgs
-  sensor_msgs
-  pcl_ros
-  cv_bridge
-  pcl_conversions
-  image_transport
-  autoware_msgs
-  autoware_config_msgs
-  geometry_msgs
-  grid_map_ros
-  grid_map_cv
-  grid_map_msgs
-  jsk_recognition_msgs
-  jsk_recognition_utils
-  eigen_conversions
-  visualization_msgs
-  tf_conversions
-  jsk_topic_tools
-  image_geometry
+        roscpp
+        std_msgs
+        sensor_msgs
+        pcl_ros
+        cv_bridge
+        pcl_conversions
+        image_transport
+        autoware_msgs
+        autoware_config_msgs
+        jsk_recognition_msgs
+        jsk_recognition_utils
+        visualization_msgs
+        jsk_topic_tools
+        image_geometry
 )
 
 
@@ -54,15 +53,9 @@ catkin_package(
         image_transport
         autoware_msgs
         autoware_config_msgs
-        geometry_msgs
-        grid_map_ros
-        grid_map_cv
-        grid_map_msgs
         jsk_recognition_msgs
         jsk_recognition_utils
-        eigen_conversions
         visualization_msgs
-        tf_conversions
         jsk_topic_tools
         image_geometry
         INCLUDE_DIRS include
@@ -71,36 +64,41 @@ catkin_package(
 ###########
 ## Build ##
 ###########
-find_path(MIIVIIFUSION_INCLUDES miivii_util.h miivii_fusion.h   
-          /opt/miivii/include)
+find_path(MIIVIIFUSION_INCLUDES miivii_util.h miivii_fusion.h
+        /opt/miivii/include)
 
 include_directories( include
-        lib
+       # lib
         ${catkin_INCLUDE_DIRS}
         ${OpenCV_INCLUDE_DIRS}
         ${autoware_msgs_INCLUDE_DIRS}
         ${PCL_INCLUDE_DIRS}
-        ${MIIVIIFUSION_INCLUDES} 
+        ${MIIVIIFUSION_INCLUDES}
+        ${Boost_INCLUDE_DIRS}
 )
-link_directories(${OpenCV_LIBRARY_DIRS})
+MESSAGE( STATUS "Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}.")
+MESSAGE( STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}.")
+MESSAGE( STATUS "Boost_LIB_VERSION = ${Boost_LIB_VERSION}.")
+
+link_directories(${OpenCV_LIBRARY_DIRS} ${Boost_LIBRARY_DIRS} )
 link_directories( ${catkin_LIB_DIRS} /opt/miivii/lib/)
 
 
 ## Declare a cpp executable
 set(NODE_NAME ${PROJECT_NAME}_node)
 add_executable(${PROJECT_NAME}_node
-               src/fusion_detector_node.cpp
-               src/fusion_detector.cpp
-               src/draw_rects.cpp
-               src/cluster.cpp
-               src/gencolors.cpp
+        src/fusion_detector_node.cpp
+        src/fusion_detector.cpp
+        src/draw_rects.cpp
 )
 target_link_libraries(${PROJECT_NAME}_node
-   ${catkin_LIBRARIES}
-   ${OpenCV_LIBRARIES}
-   ${PCL_LIBRARIES}
-   ${catkin_LIB_DIRS} miivii_fusion
+        ${catkin_LIBRARIES}
+        ${OpenCV_LIBRARIES}
+        ${PCL_LIBRARIES}
+        ${Boost_LIBRARIES}
+        ${catkin_LIB_DIRS} miivii_fusion
 )
+
 
 #############
 ## Install ##
@@ -115,11 +113,11 @@ install(TARGETS  ${PROJECT_NAME}_node
 
 ## Copy launch files
 install(DIRECTORY launch/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-  FILES_MATCHING PATTERN "*.launch"
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+        FILES_MATCHING PATTERN "*.launch"
 )
 
 install(DIRECTORY include/${PROJECT_NAME}/
-   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )

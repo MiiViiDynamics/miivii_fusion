@@ -12,9 +12,6 @@ MiiVii Fusion Unit is a series of modulized hardware for fusion fast deployment.
 | ---------- | :-----------:  | :-----------:  | :-----------:  | :-----------:  | :-----------:  |
 | Profile_Standard     | <img src="images/fusion_unit.png" width="100"> |120° x 4, 60° x 1| (optional)| 360°  |160mm x 160mm x 90mm |
 | Profile_MarmorF    | <img src="images/fusion_unit.png" width="100"> | 120° x 2, 60° x 1, 190° x 1      | (optional)  | 360°  |160mm x 160mm x 90mm |
-| Profile_120X2    | <img src="images/fusion_unit.png" width="100"> | 120° x 2      |(optional)| 240°  |160mm x 160mm x 90mm |
-| Profile_120X3    | <img src="images/fusion_unit.png" width="100"> | 120° x 3      |(optional)| ~ 300°  |160mm x 160mm x 90mm |
-| Profile_60X8    | Coming soon | 60° x 8      |(optional)| 360°  |160mm x 160mm x 90mm |
 
 ## MiiVii Fusion Detector User Guide
 

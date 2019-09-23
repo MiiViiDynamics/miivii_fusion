@@ -21,14 +21,25 @@
     <param name="camera3_cali_file" value="/opt/miivii/data/calibration/camera_lidar/perception_right.yaml" />
 
     <param name="lidar_topic" value="/lidar_points" />
+
     <param name="visualize_fusion" value="false" /><!-- param, show fusion results window -->
 
-    <param name="bounding_boxes_topic" value="/detection/lidar_detector/bounding_boxes" />
-
     <param name="pose_estimation" value="true"/>
-    <param name="use_gpu" value="false"/>
 
-    <param name="debug_time" value="true" />
+    <param name="downsample_cloud" value="true"/><!-- param, to use downsample for point_clouds -->
+
+    <param name="debug_time" value="true" /><!-- param, to show process time -->
+
+
+    <!--             advertise topic                  -->
+    <param name="bounding_boxes_topic" value="/fusion_detector/bounding_boxes" />
+
+    <param name="combined_objects_labels" value="/fusion_detector/combined_objects_labels" />
+
+    <!--publish point clouds without detect objects-->
+    <param name="enbable_publish_points_clounds_without_detectObjs" value="true" />
+    <param name="points_clounds_without_detectObjs" value="/points_clounds_without_detect_objects"/>
+    <param name="cluster_merge_threshold" value="0.5" />
   </node>
 
 </launch>

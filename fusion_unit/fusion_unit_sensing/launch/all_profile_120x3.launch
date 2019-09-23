@@ -1,0 +1,5 @@
+<launch>
+  <include file="$(find fusion_unit_sensing)/launch/imu_sanchi_100d2.launch" />
+  <include file="$(find fusion_unit_sensing)/launch/lidar_velodyne_vlp16.launch" />
+  <include file="$(find fusion_unit_sensing)/launch/camera_gmsl_perception_Ax3.launch" />
+</launch>

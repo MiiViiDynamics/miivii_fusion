@@ -1,0 +1,5 @@
+<launch>
+    <include file="$(find fusion_unit_sensing)/launch/all_profile_marmorf.launch" />
+
+    <include file="$(find fusion_unit_perception)/launch/gmsl_lidar_fusion_rviz.launch" />
+</launch>
