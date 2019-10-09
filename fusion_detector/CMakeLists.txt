@@ -28,6 +28,7 @@ find_package(catkin REQUIRED COMPONENTS
         jsk_recognition_utils
         visualization_msgs
         jsk_topic_tools
+        tf
         image_geometry
 )
 
@@ -58,14 +59,15 @@ catkin_package(
         visualization_msgs
         jsk_topic_tools
         image_geometry
+        tf
         INCLUDE_DIRS include
 )
 
 ###########
 ## Build ##
 ###########
-find_path(MIIVIIFUSION_INCLUDES miivii_util.h miivii_fusion.h
-        /opt/miivii/include)
+find_path(MIIVIIFUSION_INCLUDES MvFusionUtil.h MvFusion.h
+        /opt/miivii/include/miivii-fusion)
 
 include_directories( include
        # lib
@@ -96,7 +98,7 @@ target_link_libraries(${PROJECT_NAME}_node
         ${OpenCV_LIBRARIES}
         ${PCL_LIBRARIES}
         ${Boost_LIBRARIES}
-        ${catkin_LIB_DIRS} miivii_fusion
+        ${catkin_LIB_DIRS} mvfusion
 )
 
 

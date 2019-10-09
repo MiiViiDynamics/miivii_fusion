@@ -79,8 +79,8 @@
 
 #include "draw_rects.h"
 #include "rect_class_score.h"
-#include "miivii_fusion.h"
-#include "miivii_util.h"
+#include "MvFusion.h"
+#include "MvFusionUtil.h"
 
 #define __APP_NAME__ "fusion_dectetor"
 
@@ -89,6 +89,7 @@
 using namespace std;
 using namespace cv;
 using namespace miivii;
+using namespace fusion;
 
 namespace enc = sensor_msgs::image_encodings;
 
@@ -99,10 +100,10 @@ public:
 
   //相机参数相关
   std::string                                      calibration_file_[CAMERA_COUNT];
-  MiiViiCameraParameterWrap                        m_cameraParameter[CAMERA_COUNT];
-
-  MiiViiFusion                                     m_MiiViiFusion;
+  MvCameraParameter                                *camerasParam;
+  MvFusion                                         m_MiiViiFusion;
 public:
+
   uint                                             camCount;//当前处理相机数目，最多CAMERA_COUNT台相机
   int                                              camCount_;
 

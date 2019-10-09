@@ -53,13 +53,15 @@ int DrawRects::GetClassInt(int type)
     }
 }
 
-void DrawRects::DrawImageRect(const std::vector<MiiViiObject2d> &detected_objects,
-                                    cv::Mat &image, int RectangleThickness)
+void DrawRects::DrawImageRect(
+    const std::vector<MvObject2D> &detected_objects,
+    cv::Mat &image,
+    int RectangleThickness)
 {
-    if (detected_objects.size() == 0)
-    {
+    if (detected_objects.size() == 0){
         return;
     }
+
     // Draw rectangles for each object
     for (int kk = 0;kk<detected_objects.size();kk++)
     {
@@ -70,21 +72,28 @@ void DrawRects::DrawImageRect(const std::vector<MiiViiObject2d> &detected_object
         {
             // Draw object information label
             //DrawLabel(detected_objects[kk], image);
+
+            //printf("<MIIVII-DEBUG> [%s] %d ImgW=%d ImgH=%d RECT(x=%d y=%d w=%d h=%d) \n", __FUNCTION__, __LINE__,image.cols, image.rows,detected_objects[kk].object.x, detected_objects[kk].object.y, detected_objects[kk].object.width, detected_objects[kk].object.height);
+
             int x2 = detected_objects[kk].object.x + detected_objects[kk].object.width;
             if (x2 >= image.cols)
                 x2 = image.cols - 1;
+
             int y2 = detected_objects[kk].object.y + detected_objects[kk].object.height;
             if (y2 >= image.rows)
                 y2 = image.rows - 1;
+
             int offset  = detected_objects[kk].type * 123457 % 80;
             float red   = get_color(2, offset, 80);
             float green = get_color(1, offset, 80);
             float blue  = get_color(0, offset, 80);
-                
+
             cv::Mat image_roi = image(cv::Rect(cv::Point(detected_objects[kk].object.x, detected_objects[kk].object.y),  cv::Point(x2, y2)));
             cv::Mat color_fill(image_roi.size(), CV_8UC3,  cv::Scalar(red, green, blue));
+
             double alpha = 0.15;
             cv::addWeighted(color_fill, alpha, image_roi, 1.0 - alpha , 0.0, image_roi);
+
             // Draw rectangle
             cv::rectangle(image,
                           cv::Point(detected_objects[kk].object.x, detected_objects[kk].object.y),
@@ -97,7 +106,7 @@ void DrawRects::DrawImageRect(const std::vector<MiiViiObject2d> &detected_object
     }
 }
 
-void DrawRects::DrawLabel(MiiViiObject2d &in_detected_object,
+void DrawRects::DrawLabel(MvObject2D &in_detected_object,
                           cv::Mat &image)
 {
     cv::Point rectangle_origin(in_detected_object.object.x, in_detected_object.object.y);

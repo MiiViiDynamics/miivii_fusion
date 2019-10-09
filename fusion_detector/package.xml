@@ -23,6 +23,7 @@
   <build_depend>jsk_recognition_utils</build_depend>
   <build_depend>jsk_topic_tools</build_depend>
   <build_depend>image_geometry</build_depend>
+  <build_depend>tf</build_depend>
 
   <build_depend>visualization_msgs</build_depend>
 
@@ -40,7 +41,7 @@
   <run_depend>jsk_topic_tools</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>image_geometry</run_depend>
-
+  <run_depend>tf</run_depend>
   <run_depend>visualization_msgs</run_depend>
 
   <!-- The export tag contains other, unspecified, tags -->

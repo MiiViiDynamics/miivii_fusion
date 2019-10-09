@@ -29,6 +29,16 @@ void fusion_detector::ReleaseBuffer()
       delete InImage[kk];
     }
   }
+
+  printf("<MIIVII-DEBUG> [%s] %d\n", __FUNCTION__, __LINE__);
+  for(int i=0;i<camCount;i++)
+  {
+    camerasParam[i].Release();
+  }
+  if(lidar_processing_)
+    if(camerasParam != NULL)        {    delete camerasParam;          camerasParam = NULL;}
+
+  printf("<MIIVII-DEBUG> [%s] %d\n", __FUNCTION__, __LINE__);
 }
 
 void fusion_detector::Initialize_Camera_lidar(){
@@ -73,17 +83,23 @@ void fusion_detector::Initialize_Camera_lidar(){
   nh_.param("camera3_detect_results", detected_objects_vision[2], std::string("/camera_perception/perception/right/detection_results"));
   nh_.param("camera4_detect_results", detected_objects_vision[3], std::string("/camera_perception/perception/rear/detection_results"));
 
+  camerasParam         = new MvCameraParameter[camCount];
+
   for(int i=0;i<camCount;i++)
   {
     ROS_INFO("%s",calibration_file_[i].c_str());
     ROS_INFO("%s",camera_topic_name_[i].c_str());
     ROS_INFO("%s",detected_objects_vision[i].c_str());
 
-    m_cameraParameter[i].LoadCameraParameter(calibration_file_[i]);
+    camerasParam[i].LoadCameraParameter(calibration_file_[i]);
+
+    cv::Size imageSize;
+    imageSize =   camerasParam[i].GetImageSize();
+
     bGetingImage[i] = false;
     bGettedImage[i] = false;
     InImage[i] = new cv::Mat();
-    InImage[i]->create(m_cameraParameter[i].imageSize.width, m_cameraParameter[i].imageSize.height, CV_8UC3);
+    InImage[i]->create( imageSize.width,  imageSize.height, CV_8UC3);
   }
 
   // debug
@@ -106,10 +122,12 @@ void fusion_detector::Initialize_Camera_lidar(){
   //-----------------------------订阅topic相关------------------------------
   nh_.param("lidar_topic", lidar_topic_name_, std::string("/lidar_points"));
   ROS_INFO("%s",lidar_topic_name_.c_str());
+
   lidar_sub_ = nh_.subscribe(lidar_topic_name_.c_str(), 1, &fusion_detector::lidarCallback,this);
 
   for(int i=0;i<camCount;i++)
   {
+
     image_sub_[i] = it_.subscribe(camera_topic_name_[i].c_str(), 1, boost::bind(&fusion_detector::cameraCallback, this, _1, i));
 
     miivii_detector_sub_[i] = nh_.subscribe<autoware_msgs::DetectedObjectArray>(detected_objects_vision[i].c_str(), 1, boost::bind(&fusion_detector::miivii_detector_Callback, this, _1, i));
@@ -129,7 +147,6 @@ void fusion_detector::Initialize_Camera_lidar(){
   nh_.param("combined_objects_labels", pub_combined_objects_labels, std::string("/fusion_detector/bounding_boxess"));
   publisher_fused_text_    = nh_.advertise<visualization_msgs::MarkerArray>(pub_combined_objects_labels.c_str(), 1);
 
-  //
   nh_.param<bool>("enbable_publish_points_clounds_without_detectObjs", enbable_publish_points_clounds_without_detectObjs, false);
   if(enbable_publish_points_clounds_without_detectObjs)
   {
@@ -137,7 +154,6 @@ void fusion_detector::Initialize_Camera_lidar(){
     ROS_INFO("%s",points_clounds_withour_detectObjs_.c_str());
     _publisher_points_clounds_without_detectObjs = nh_.advertise<sensor_msgs::PointCloud2>(points_clounds_withour_detectObjs_.c_str(), 1);
   }
-
 
   nh_.param("bounding_boxes_topic", pub_jsk_boundingboxes_topic_, std::string("/fusion_detector/bounding_boxess"));
   ROS_INFO("%s",pub_jsk_boundingboxes_topic_.c_str());
@@ -149,9 +165,10 @@ void fusion_detector::Initialize_Camera_lidar(){
 
 void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>::Ptr  incloud)
 {
+
   if(m_downsample_cloud){
     downsample_incloud->points.clear();
-    MiiViiFusion::Down_Sampling(incloud,downsample_incloud,1);
+    MvFusion::DownSamplePointClouds(incloud,downsample_incloud,1);
   }
   else
     downsample_incloud = incloud;
@@ -165,13 +182,12 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
   fused_objects.header = lidar_msg_header;
   jsk_recognition_msgs::BoundingBoxArray boundingbox_array;
 
-  std::vector<std::vector<MiiViiObject2d> >        allresult2d;
-  std::vector<MiiViiCameraParameterWrap>           camerasParam;
+  std::vector<std::vector<MvObject2D> >        allresult2d;
 
   for(int i=0; i<camCount; i++)
   {
-    MiiViiObject2d temp_result2d;
-    std::vector<MiiViiObject2d> result2d;
+    MvObject2D temp_result2d;
+    std::vector<MvObject2D> result2d;
     for (const auto &detected_object : detected_objects_msg_[i]->objects)
     {
       if(detected_object.label == "person" )
@@ -199,12 +215,11 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
       result2d.push_back(temp_result2d);
     }
     allresult2d.push_back(result2d);
-    camerasParam.push_back(m_cameraParameter[i]);
   }
   autoware_msgs::DetectedObject fusion_detected_object;
 
-  std::vector<MiiViiObject3d> outputresult;
-  m_MiiViiFusion.Fuse_Lidar_MultiCameras( downsample_incloud,
+  std::vector<MvObject3D> outputresult;
+  m_MiiViiFusion.FuseLidarWithMultiCameras( downsample_incloud,
                                               camerasParam,
                                               allresult2d,
                                               outputresult,
@@ -217,17 +232,17 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
     {
       fusion_detected_object.header                 = lidar_msg_header;
       //detected_object.space_frame                 = out_cluster.header.frame_id;
-      fusion_detected_object.score                  = outputresult[kkk].object2d.score;
+      fusion_detected_object.score                  = outputresult[kkk].object2d_.score;
       fusion_detected_object.label                  = outputresult[kkk].GetLabel();
-      fusion_detected_object.id                     = outputresult[kkk].object2d.objectID;
+      fusion_detected_object.id                     = outputresult[kkk].object2d_.objectID;
 
       //fusion_detected_object.image_frame          = detected_object.image_frame;
-      fusion_detected_object.x                      = outputresult[kkk].object2d.object.x;
-      fusion_detected_object.y                      = outputresult[kkk].object2d.object.y;
-      fusion_detected_object.width                  = outputresult[kkk].object2d.object.width;
-      fusion_detected_object.height                 = outputresult[kkk].object2d.object.height;
-      //fusion_detected_object.angle                = detected_object.angle;
-      fusion_detected_object.id                     = outputresult[kkk].object2d.objectID;
+      fusion_detected_object.x                      = outputresult[kkk].object2d_.object.x;
+      fusion_detected_object.y                      = outputresult[kkk].object2d_.object.y;
+      fusion_detected_object.width                  = outputresult[kkk].object2d_.object.width;
+      fusion_detected_object.height                 = outputresult[kkk].object2d_.object.height;
+      fusion_detected_object.angle                  = outputresult[kkk].bounding_box_.angle;
+      fusion_detected_object.id                     = outputresult[kkk].object2d_.objectID;
 
 
       fusion_detected_object.pose.position.x        = outputresult[kkk].bounding_box_.position.x;
@@ -240,7 +255,7 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
 
       sensor_msgs::PointCloud2 cloud_msg;
 
-      pcl::toROSMsg(*(outputresult[kkk].pointcloud), cloud_msg);
+      pcl::toROSMsg(*(outputresult[kkk].pointcloud_), cloud_msg);
       fusion_detected_object.pointcloud             = cloud_msg;
 
       //fusion_detected_object.convex_hull          = tempcloud_cluster.convex_hull;
@@ -253,13 +268,19 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
       bounding_box.pose.position.y        = outputresult[kkk].bounding_box_.position.y;
       bounding_box.pose.position.z        = outputresult[kkk].bounding_box_.position.z;
 
+      if(fusion_detected_object.label != "person"){
+        tf::Quaternion quat = tf::createQuaternionFromRPY(0.0, 0.0, outputresult[kkk].bounding_box_.angle);
+        tf::quaternionTFToMsg(quat, bounding_box.pose.orientation);
+
+      }
+
       bounding_box.dimensions.x  = outputresult[kkk].bounding_box_.dimensions.x;
       bounding_box.dimensions.y  = outputresult[kkk].bounding_box_.dimensions.y;
       bounding_box.dimensions.z  = outputresult[kkk].bounding_box_.dimensions.z;
 
       bounding_box.header = lidar_msg_header;
-      bounding_box.label  = outputresult[kkk].object2d.objectID;
-      bounding_box.value  = outputresult[kkk].object2d.score;
+      bounding_box.label  = outputresult[kkk].object2d_.objectID;
+      bounding_box.value  = outputresult[kkk].object2d_.score;
 
       if(bounding_box.dimensions.x <0.2
       || bounding_box.dimensions.y <0.2
@@ -273,6 +294,18 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
         {
           bounding_box.dimensions.x = 0.4;
           bounding_box.dimensions.y = 0.4;
+        }
+        else if(outputresult[kkk].GetLabel() == "car"  )
+        {
+          bounding_box.dimensions.x = 2.5;
+          bounding_box.dimensions.y = 1;
+          bounding_box.dimensions.z = 0.6;
+        }
+        else if(outputresult[kkk].GetLabel() == "bus"  )
+        {
+          bounding_box.dimensions.x = 6;
+          bounding_box.dimensions.y = 2.2;
+          bounding_box.dimensions.z = 2.2;
         }
         boundingbox_array.boxes.push_back(bounding_box);
       }
@@ -293,7 +326,7 @@ void fusion_detector::fusion_lidar_cameras(const pcl::PointCloud<pcl::PointXYZ>:
 
   if(enbable_publish_points_clounds_without_detectObjs){
     tempdetectObj_cloud_ptr->points.clear();
-    m_MiiViiFusion.Remove_Objects_Pointclouds(incloud,outputresult, tempdetectObj_cloud_ptr );
+    m_MiiViiFusion.RemoveObjectsFromPointClouds(incloud,outputresult, tempdetectObj_cloud_ptr );
     publishCloud(&_publisher_points_clounds_without_detectObjs, lidar_msg_header, tempdetectObj_cloud_ptr);
   }
 }
@@ -302,10 +335,11 @@ void fusion_detector::points_to_image( const pcl::PointCloud<pcl::PointXYZ>::Ptr
 {
   for(int tempCameraId=0; tempCameraId<camCount; tempCameraId++)
   {
-    if (InImage[tempCameraId]->empty()  && !bGettedImage[tempCameraId] )
+    if ( !bGettedImage[tempCameraId] )
       continue;
-    std::vector<MiiViiObject2d> result2d;
-    MiiViiObject2d temp_result2d;
+    //printf("<MIIVII-DEBUG> [%s] %d  %d ImgW=%d ImgH=%d\n", __FUNCTION__, __LINE__,bGettedImage[tempCameraId], InImage[tempCameraId]->cols, InImage[tempCameraId]->rows);
+    std::vector<MvObject2D> result2d;
+    MvObject2D temp_result2d;
     for (const auto &detected_object : detected_objects_msg_[tempCameraId]->objects)
     {
       if( detected_object.label == "person" ||
@@ -342,23 +376,30 @@ void fusion_detector::points_to_image( const pcl::PointCloud<pcl::PointXYZ>::Ptr
         result2d.push_back(temp_result2d);
       }
     }
+
     cv::Mat fusion_resultImage;
     if(!bGetingImage[tempCameraId]){
       cv_bridge::CvImage out_msg;
       out_msg.header = lidar_msg_header;
       out_msg.encoding = sensor_msgs::image_encodings::BGR8;
-      if(result2d.size()>0){
-        m_MiiViiFusion.Fuse_Lidar_Camera_to_image(in_origin_cloud_ptr,
-                                                              m_cameraParameter[tempCameraId],
-                                                              result2d,
-                                                              *InImage[tempCameraId],
-                                                              fusion_resultImage);
+      if(result2d.size()>0)
+      {
+
+        m_MiiViiFusion.DrawObjectsAndPointCloudsOnImage(in_origin_cloud_ptr,
+                                                        &(camerasParam[tempCameraId]),
+                                                        result2d,
+                                                        *InImage[tempCameraId],
+                                                        fusion_resultImage);
         DrawRects  rects_drawer;
+
         rects_drawer.DrawImageRect(result2d, fusion_resultImage,2);
+
         out_msg.image = fusion_resultImage.clone();
       }
       else{
+
         out_msg.image = InImage[tempCameraId]->clone();
+
       }
       fusion_results_image_pub_[tempCameraId].publish(out_msg.toImageMsg());
     }
@@ -381,7 +422,12 @@ void fusion_detector::cameraCallback(const sensor_msgs::ImageConstPtr& msg, int 
     cv_ptr = cv_bridge::toCvCopy(msg, enc::BGR8);
     bGetingImage[cameraID] = true;
     *InImage[cameraID] = cv_ptr->image.clone();
-    bGettedImage[cameraID] = true;
+
+    if(!bGettedImage[cameraID] )
+    {
+      bGettedImage[cameraID] = true;
+    }
+
     bGetingImage[cameraID] = false;
   }
   catch (cv_bridge::Exception& e)
