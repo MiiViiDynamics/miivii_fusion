@@ -21,6 +21,6 @@
   <!--- Run Detector -->
   <include file="$(find fusion_unit_perception)/launch/include/miivii_detector.launch" />
   <!--- Run fusion node -->
-  <include file="$(find fusion_unit_perception)/launch/include/fusion_lidar_camera_marmorf.launch" />
+  <include file="$(find fusion_unit_perception)/launch/include/fusion_lidar_camera_marmorf_vis.launch" />
 
 </launch>
